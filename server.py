@@ -100,10 +100,20 @@ def download_audio(url: str, output_dir: Path, quality: int) -> Path | None:
 @app.get("/")
 async def serve_frontend():
     """Serve the PWA frontend."""
-    frontend_path = Path(__file__).parent / "static" / "index.html"
-    if frontend_path.exists():
-        return HTMLResponse(frontend_path.read_text())
-    return HTMLResponse("<h1>yt→mp3</h1><p>Frontend not found.</p>")
+    candidates = [
+        Path(__file__).parent / "static" / "index.html",
+        Path("/app/static/index.html"),
+        Path("static/index.html"),
+        Path(__file__).parent / "index.html",
+        Path("/app/index.html"),
+        Path("index.html"),
+    ]
+    for path in candidates:
+        if path.exists():
+            return HTMLResponse(path.read_text())
+    import os
+    cwd_files = os.listdir(".")
+    return HTMLResponse(f"<h1>yt-mp3</h1><p>Frontend not found.</p><pre>CWD: {os.getcwd()}\nFiles: {cwd_files}</pre>")
 
 
 @app.get("/manifest.json")
