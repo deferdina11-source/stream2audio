@@ -11,31 +11,18 @@ let showDonate = false;
 let progressInterval = null;
 
 let isProcessing = false;
-let inputTimer = null;
 
 // --- HELPERS ---
-function isYouTubeUrl(value) {
-    return value.includes("youtube.com") || value.includes("youtu.be");
-}
-
 function extractVideoId(u) {
     const patterns = [
         /(?:youtube\.com\/watch\?v=)([^&\s]+)/,
         /(?:youtu\.be\/)([^?\s]+)/,
-        /(?:youtube\.com\/embed\/)([^?\s]+)/,
-        /(?:youtube\.com\/shorts\/)([^?\s]+)/,
     ];
     for (const p of patterns) {
         const m = u.match(p);
         if (m) return m[1];
     }
     return null;
-}
-
-function formatDuration(s) {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${m}:${String(sec).padStart(2, '0')}`;
 }
 
 function escapeHtml(s) {
@@ -45,18 +32,6 @@ function escapeHtml(s) {
 }
 
 // --- API ---
-async function fetchInfo(videoUrl) {
-    const res = await fetch('/api/info', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: videoUrl }),
-    });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || data.detail);
-    return data;
-}
-
 async function fetchConvert(videoUrl, q) {
     const res = await fetch('/api/convert', {
         method: 'POST',
@@ -69,34 +44,9 @@ async function fetchConvert(videoUrl, q) {
     return data;
 }
 
-// --- CORE FIX: DEBOUNCED INPUT ---
-function handleInput(value) {
-    url = value;
-
-    if (state === 'error') {
-        state = 'idle';
-        errorMsg = '';
-    }
-
-    clearTimeout(inputTimer);
-
-    inputTimer = setTimeout(async () => {
-        if (!url) return;
-
-        // Only fetch info if it's a real URL
-        if (isYouTubeUrl(url)) {
-            try {
-                const info = await fetchInfo(url);
-                videoInfo = info;
-                render();
-            } catch {}
-        }
-    }, 400);
-}
-
-// --- FIX: LOCK CONVERT ---
+// --- MAIN FIX ---
 async function handleConvert() {
-    if (isProcessing) return;
+    if (isProcessing) return; // 🔒 LOCK
 
     const vid = extractVideoId(url);
     if (!vid) {
@@ -109,16 +59,18 @@ async function handleConvert() {
     isProcessing = true;
     state = 'loading';
     progress = 0;
-    render();
+    render(); // 🔥 ONLY render once
 
+    // progress loop (NO render inside)
     progressInterval = setInterval(() => {
-        progress = Math.min(progress + Math.random() * 6 + 2, 90);
+        progress = Math.min(progress + Math.random() * 5 + 2, 90);
 
         const bar = document.getElementById('prog-bar');
         const pct = document.getElementById('prog-pct');
 
         if (bar) bar.style.width = progress + '%';
         if (pct) pct.textContent = Math.round(progress) + '%';
+
     }, 400);
 
     try {
@@ -128,12 +80,8 @@ async function handleConvert() {
         progress = 100;
 
         fileId = result.file_id;
-        videoInfo = {
-            ...videoInfo,
-            size_mb: result.size_mb
-        };
-
         state = 'done';
+
     } catch (e) {
         clearInterval(progressInterval);
         state = 'error';
@@ -144,18 +92,17 @@ async function handleConvert() {
     render();
 }
 
-// --- RESET ---
 function handleReset() {
+    if (state === 'loading') return;
+
     url = '';
     state = 'idle';
-    videoInfo = null;
     fileId = null;
     errorMsg = '';
     progress = 0;
     render();
 }
 
-// --- PASTE ---
 async function handlePaste() {
     try {
         const text = await navigator.clipboard.readText();
@@ -166,25 +113,31 @@ async function handlePaste() {
 
 // --- RENDER ---
 function render() {
-    const vid = extractVideoId(url);
-    const thumb = vid ? `https://img.youtube.com/vi/${vid}/mqdefault.jpg` : null;
 
     let html = `
-    <input id="url-input" value="${escapeHtml(url)}" placeholder="Paste link or search">
-    <button onclick="handleConvert()">Convert</button>
+    <div>
+        <input id="url-input" value="${escapeHtml(url)}" placeholder="Paste YouTube link">
+        <button onclick="handleConvert()">Convert</button>
+    </div>
     `;
 
     if (state === 'loading') {
         html += `
         <div>
-            <div id="prog-bar" style="height:6px;background:red;width:${progress}%"></div>
+            <div style="width:100%;height:6px;background:#222;border-radius:4px;">
+                <div id="prog-bar" style="height:100%;width:${progress}%;background:red"></div>
+            </div>
             <div id="prog-pct">${Math.round(progress)}%</div>
+
+            <div style="margin-top:10px;">
+                <div class="spinner"></div>
+            </div>
         </div>`;
     }
 
     if (state === 'done') {
         html += `
-        <a href="/api/download/${fileId}" download>Download</a>
+        <a href="/api/download/${fileId}" download>Download MP3</a>
         <button onclick="handleReset()">New</button>`;
     }
 
@@ -194,9 +147,22 @@ function render() {
 
     document.getElementById('app').innerHTML = html;
 
-    document.getElementById('url-input').addEventListener('input', e => {
-        handleInput(e.target.value);
-    });
+    const input = document.getElementById('url-input');
+
+    if (input) {
+        input.addEventListener('input', (e) => {
+            if (state === 'loading') return; // 🔒 prevents flicker
+
+            url = e.target.value;
+
+            if (state === 'error') {
+                state = 'idle';
+                errorMsg = '';
+            }
+
+            render();
+        });
+    }
 }
 
 // INIT
