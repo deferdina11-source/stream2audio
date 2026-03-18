@@ -11,22 +11,18 @@ app = FastAPI()
 DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-# 👇 SERVE YOUR FRONTEND
+# Serve frontend
 app.mount("/static", StaticFiles(directory="."), name="static")
 
-
-# 👇 ROOT = index.html
 @app.get("/")
 def root():
     return FileResponse("index.html")
 
-
 # -----------------------
-# MODELS
+# MODEL
 # -----------------------
 class ConvertRequest(BaseModel):
     url: str
-
 
 # -----------------------
 # CONVERT
@@ -38,6 +34,7 @@ def convert(req: ConvertRequest):
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": f"{DOWNLOAD_DIR}/{file_id}.%(ext)s",
+        "noplaylist": True,  # 🔥 CRITICAL FIX
         "postprocessors": [{
             "key": "FFmpegExtractAudio",
             "preferredcodec": "mp3",
@@ -45,18 +42,19 @@ def convert(req: ConvertRequest):
         }],
     }
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([req.url])
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([req.url])
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
     return {"file_id": file_id}
-
 
 # -----------------------
 # DOWNLOAD
 # -----------------------
 @app.get("/api/download/{file_id}")
 def download(file_id: str):
-
     path = f"{DOWNLOAD_DIR}/{file_id}.mp3"
 
     if not os.path.exists(path):
