@@ -8,7 +8,7 @@
 <style>
 body {
     margin: 0;
-    font-family: Arial, sans-serif;
+    font-family: Arial;
     background: #0f0f0f;
     color: white;
     display: flex;
@@ -16,77 +16,43 @@ body {
     align-items: center;
     height: 100vh;
 }
-
 .container {
     width: 90%;
     max-width: 400px;
     text-align: center;
 }
-
-h1 {
-    margin-bottom: 20px;
-}
-
 input {
     width: 100%;
     padding: 14px;
     border-radius: 10px;
     border: none;
     margin-bottom: 15px;
-    font-size: 16px;
 }
-
 button {
     width: 100%;
     padding: 15px;
     border-radius: 10px;
     border: none;
-    background: linear-gradient(90deg, #ff3c3c, #ff6a6a);
+    background: red;
     color: white;
-    font-size: 16px;
     cursor: pointer;
 }
-
-button:disabled {
-    opacity: 0.6;
-}
-
 .progress {
     margin-top: 20px;
     height: 6px;
     background: #333;
-    border-radius: 5px;
-    overflow: hidden;
 }
-
-.progress-bar {
+.bar {
     height: 100%;
     width: 0%;
-    background: #ff3c3c;
-    transition: width 0.3s;
+    background: red;
 }
-
 .spinner {
     margin-top: 20px;
-    border: 4px solid #333;
-    border-top: 4px solid #ff3c3c;
-    border-radius: 50%;
-    width: 30px;
-    height: 30px;
-    animation: spin 1s linear infinite;
     display: none;
-    margin-left: auto;
-    margin-right: auto;
 }
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
 .error {
     color: red;
-    margin-top: 10px;
 }
 </style>
 </head>
@@ -97,45 +63,47 @@ button:disabled {
     <h1>yt → mp3</h1>
 
     <input id="url" placeholder="Paste YouTube link">
+    <button id="btn">Convert</button>
 
-    <button id="convertBtn">Convert to MP3</button>
-
-    <div class="spinner" id="spinner"></div>
+    <div class="spinner" id="spinner">Loading...</div>
 
     <div class="progress">
-        <div class="progress-bar" id="progressBar"></div>
+        <div class="bar" id="bar"></div>
     </div>
 
     <div class="error" id="error"></div>
 </div>
 
 <script>
-const btn = document.getElementById("convertBtn");
+const btn = document.getElementById("btn");
 const spinner = document.getElementById("spinner");
-const progressBar = document.getElementById("progressBar");
-const errorBox = document.getElementById("error");
+const bar = document.getElementById("bar");
+const error = document.getElementById("error");
 
-btn.addEventListener("click", async () => {
+btn.onclick = async () => {
 
     const url = document.getElementById("url").value.trim();
-    errorBox.innerText = "";
+    error.innerText = "";
 
     if (!url) {
-        errorBox.innerText = "Enter a valid YouTube URL";
+        error.innerText = "Enter URL";
         return;
     }
 
-    btn.disabled = true;
     spinner.style.display = "block";
-    progressBar.style.width = "10%";
+    bar.style.width = "20%";
 
     try {
-        // STEP 1: Convert
         const res = await fetch("/api/convert", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({ url })
         });
+
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(text);
+        }
 
         const data = await res.json();
 
@@ -143,12 +111,9 @@ btn.addEventListener("click", async () => {
             throw new Error("Conversion failed");
         }
 
-        progressBar.style.width = "70%";
+        bar.style.width = "80%";
 
-        // STEP 2: Download (FIXED VERSION)
         const downloadUrl = `${window.location.origin}/api/download/${data.file_id}`;
-
-        progressBar.style.width = "100%";
 
         const a = document.createElement("a");
         a.href = downloadUrl;
@@ -157,13 +122,14 @@ btn.addEventListener("click", async () => {
         a.click();
         document.body.removeChild(a);
 
-    } catch (err) {
-        errorBox.innerText = err.message || "Something went wrong";
+        bar.style.width = "100%";
+
+    } catch (e) {
+        error.innerText = e.message;
     }
 
     spinner.style.display = "none";
-    btn.disabled = false;
-});
+};
 </script>
 
 </body>
