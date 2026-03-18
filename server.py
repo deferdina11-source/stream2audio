@@ -8,7 +8,9 @@ import asyncio
 import shutil
 import subprocess
 import json
+import re
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -56,13 +58,27 @@ def cleanup_old_files():
             if item.is_dir() and (now - item.stat().st_mtime) > CLEANUP_AGE_SECONDS:
                 shutil.rmtree(item, ignore_errors=True)
 
+def _clean_url(url: str) -> str:
+    """Strip playlist and tracking params, keep only video ID."""
+    parsed = urlparse(url)
+    params = parse_qs(parsed.query)
+    # Keep only the 'v' parameter for youtube.com URLs
+    if 'v' in params:
+        clean_query = urlencode({'v': params['v'][0]})
+        return urlunparse((parsed.scheme, parsed.netloc, parsed.path, '', clean_query, ''))
+    # For youtu.be short URLs, strip query params
+    if 'youtu.be' in parsed.netloc:
+        return urlunparse((parsed.scheme, parsed.netloc, parsed.path, '', '', ''))
+    return url
+
 def _base_cmd() -> list[str]:
-    cmd = ["yt-dlp", "--js-runtimes", "node"]
+    cmd = ["yt-dlp", "--js-runtimes", "node", "--no-playlist"]
     if HAS_COOKIES:
         cmd += ["--cookies", str(COOKIE_PATH)]
     return cmd
 
 def extract_info(url: str) -> dict:
+    url = _clean_url(url)
     cmd = _base_cmd() + [
         "--skip-download",
         "--ignore-no-formats-error",
@@ -70,7 +86,7 @@ def extract_info(url: str) -> dict:
         "--dump-json",
         url,
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     if result.stdout.strip():
         for line in result.stdout.strip().split('\n'):
             line = line.strip()
@@ -79,6 +95,7 @@ def extract_info(url: str) -> dict:
     raise Exception(result.stderr.strip() or "Could not fetch video info")
 
 def download_audio(url: str, output_dir: Path, quality: int) -> Path | None:
+    url = _clean_url(url)
     formats = ["bestaudio/best", "bestaudio*", "best"]
     last_error = ""
     for fmt in formats:
@@ -91,7 +108,7 @@ def download_audio(url: str, output_dir: Path, quality: int) -> Path | None:
             "-o", str(output_dir / "%(title)s.%(ext)s"),
             url,
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
         mp3_files = list(output_dir.glob("*.mp3"))
         if mp3_files:
             return mp3_files[0]
