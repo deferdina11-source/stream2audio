@@ -93,6 +93,6 @@ def download(file_id: str):
 
     return FileResponse(
         path,
-        filename=f"{file_id}.mp3",
+        filename=f"{file_id}.mp3,
         media_type="audio/mpeg"
     )
