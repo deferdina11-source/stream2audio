@@ -126,7 +126,7 @@ async def serve_frontend():
     # Try multiple possible locations
     candidates = [
         Path(__file__).parent / "static" / "index.html",
-        Path("/app/static/index.html"),
+        Path("/app/static /index.html"),
         Path("static/index.html"),
         Path(__file__).parent / "index.html",
         Path("/app/index.html"),
