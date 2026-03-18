@@ -1,53 +1,33 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>yt → mp3</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 body {
     background:#0e0e0e;
     color:#fff;
     font-family:sans-serif;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    height:100vh;
+    padding:20px;
 }
 
-.app {
-    width:100%;
-    max-width:400px;
-}
-
-input {
+input, button {
     width:100%;
     padding:12px;
-    margin-bottom:10px;
+    margin-top:10px;
     background:#1a1a1a;
-    border:1px solid #333;
     color:#fff;
+    border:1px solid #333;
 }
 
 button {
-    width:100%;
-    padding:12px;
     background:red;
     border:none;
-    color:#fff;
-    font-weight:bold;
-    cursor:pointer;
 }
 
 .result {
     padding:10px;
-    border-bottom:1px solid #222;
+    border-bottom:1px solid #333;
     cursor:pointer;
-}
-
-.result:hover {
-    background:#222;
 }
 
 .progress {
@@ -64,64 +44,42 @@ button {
     background:red;
     width:0%;
 }
-
-.spinner {
-    margin-top:10px;
-}
 </style>
 </head>
 
 <body>
 
-<div class="app">
-
-<input id="input" placeholder="Paste link or search artist/song">
+<input id="input" placeholder="Paste YouTube URL or search">
 
 <div id="results"></div>
 
-<button id="convert">Convert</button>
+<div id="info"></div>
+
+<button onclick="convert()">Convert</button>
 
 <div class="progress" id="progress" style="display:none;">
     <div class="bar">
         <div class="bar-inner" id="bar"></div>
     </div>
     <div id="percent">0%</div>
-    <div class="spinner">⏳ Converting...</div>
 </div>
 
 <div id="download"></div>
 
-</div>
-
 <script>
 let selectedUrl = null;
-let timer = null;
-let loading = false;
+let timer;
 
-const input = document.getElementById('input');
-const results = document.getElementById('results');
-const convertBtn = document.getElementById('convert');
-const progress = document.getElementById('progress');
-const bar = document.getElementById('bar');
-const percent = document.getElementById('percent');
-const download = document.getElementById('download');
-
-// --- SEARCH ---
-input.addEventListener('input', () => {
-
-    if (loading) return;
+// SEARCH
+document.getElementById('input').addEventListener('input', () => {
 
     clearTimeout(timer);
 
     const value = input.value.trim();
 
-    if (!value) {
-        results.innerHTML = '';
-        return;
-    }
+    if (!value) return;
 
-    // If URL → skip search
-    if (value.includes("youtube.com") || value.includes("youtu.be")) {
+    if (value.includes("youtube")) {
         selectedUrl = value;
         results.innerHTML = '';
         return;
@@ -148,6 +106,7 @@ input.addEventListener('input', () => {
                 selectedUrl = v.webpage_url;
                 input.value = v.title;
                 results.innerHTML = '';
+                loadInfo(selectedUrl);
             };
 
             results.appendChild(div);
@@ -156,58 +115,67 @@ input.addEventListener('input', () => {
     }, 400);
 });
 
-// --- CONVERT ---
-convertBtn.onclick = async () => {
 
-    if (loading) return;
+// LOAD INFO
+async function loadInfo(url) {
+    const res = await fetch('/api/info', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({url})
+    });
+
+    const data = await res.json();
+
+    document.getElementById('info').innerHTML = `
+        <img src="${data.thumbnail}" width="100%">
+        <p>${data.title}</p>
+    `;
+}
+
+
+// CONVERT
+async function convert() {
 
     const value = input.value.trim();
 
-    if (!value && !selectedUrl) {
-        alert('Enter URL or search');
+    if (!selectedUrl && !value.includes("youtube")) {
+        alert("Select result or paste valid URL");
         return;
     }
 
     const url = selectedUrl || value;
 
-    loading = true;
+    loadInfo(url);
+
     progress.style.display = 'block';
 
     let p = 0;
 
     const fake = setInterval(() => {
-        p = Math.min(p + Math.random()*10, 90);
+        p = Math.min(p + 10, 90);
         bar.style.width = p + '%';
-        percent.textContent = Math.floor(p) + '%';
-    }, 400);
+        percent.textContent = p + '%';
+    }, 300);
 
-    try {
+    const res = await fetch('/api/convert', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({url})
+    });
 
-        const res = await fetch('/api/convert', {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({url:url, quality:192})
-        });
+    const data = await res.json();
 
-        const data = await res.json();
+    clearInterval(fake);
 
-        clearInterval(fake);
+    bar.style.width = '100%';
+    percent.textContent = '100%';
 
-        bar.style.width = '100%';
-        percent.textContent = '100%';
-
-        download.innerHTML = `
-            <a href="/api/download/${data.file_id}">
-                <button>Download MP3</button>
-            </a>
-        `;
-
-    } catch (e) {
-        alert('Error');
-    }
-
-    loading = false;
-};
+    download.innerHTML = `
+        <a href="/api/download/${data.file_id}">
+            <button>Download MP3</button>
+        </a>
+    `;
+}
 </script>
 
 </body>
