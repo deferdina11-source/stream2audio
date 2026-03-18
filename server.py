@@ -57,9 +57,10 @@ def cleanup_old_files():
     """Remove downloads older than CLEANUP_AGE_SECONDS."""
     import time
     now = time.time()
-    for item in DOWNLOAD_DIR.iterdir():
-        if item.is_dir() and (now - item.stat().st_mtime) > CLEANUP_AGE_SECONDS:
-            shutil.rmtree(item, ignore_errors=True)
+    if DOWNLOAD_DIR.exists():
+        for item in DOWNLOAD_DIR.iterdir():
+            if item.is_dir() and (now - item.stat().st_mtime) > CLEANUP_AGE_SECONDS:
+                shutil.rmtree(item, ignore_errors=True)
 
 
 def _get_base_opts() -> dict:
@@ -68,12 +69,12 @@ def _get_base_opts() -> dict:
         "quiet": True,
         "no_warnings": True,
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-us,en;q=0.5",
             "Sec-Fetch-Mode": "navigate",
         },
-        "extractor_args": {"youtube": {"player_client": ["web", "mweb"]}},
+        "extractor_args": {"youtube": {"player_client": ["web", "mweb", "android"]}},
         "socket_timeout": 30,
     }
 
@@ -92,42 +93,66 @@ def extract_info(url: str) -> dict:
     ydl_opts = {
         **_get_base_opts(),
         "extract_flat": False,
+        "skip_download": True,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         return ydl.extract_info(url, download=False)
 
 
 def download_audio(url: str, output_dir: Path, quality: int) -> Path | None:
-    """Download and convert to MP3."""
-    ydl_opts = {
-        **_get_base_opts(),
-        "format": "bestaudio*",
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": str(quality),
-            }
-        ],
-        "outtmpl": str(output_dir / "%(title)s.%(ext)s"),
-    }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+    """Download and convert to MP3. Tries multiple format options."""
+    formats_to_try = [
+        "bestaudio/best",
+        "bestaudio*",
+        "ba/b",
+        "worstaudio",
+    ]
 
-    # Find the resulting MP3
-    mp3_files = list(output_dir.glob("*.mp3"))
-    return mp3_files[0] if mp3_files else None
+    base_opts = _get_base_opts()
+    last_error = None
+
+    for fmt in formats_to_try:
+        try:
+            ydl_opts = {
+                **base_opts,
+                "format": fmt,
+                "postprocessors": [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                        "preferredquality": str(quality),
+                    }
+                ],
+                "outtmpl": str(output_dir / "%(title)s.%(ext)s"),
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+
+            # Find the resulting MP3
+            mp3_files = list(output_dir.glob("*.mp3"))
+            if mp3_files:
+                return mp3_files[0]
+        except Exception as e:
+            last_error = e
+            continue
+
+    # If all formats failed, raise the last error
+    if last_error:
+        raise last_error
+    return None
 
 
 # --- Routes ---
 @app.get("/")
 async def serve_frontend():
     """Serve the PWA frontend."""
-    # Try multiple possible locations
+    # Try multiple possible locations (including 'static ' with trailing space)
     candidates = [
         Path(__file__).parent / "static" / "index.html",
+        Path("/app/static/index.html"),
         Path("/app/static /index.html"),
         Path("static/index.html"),
+        Path("static /index.html"),
         Path(__file__).parent / "index.html",
         Path("/app/index.html"),
         Path("index.html"),
@@ -137,10 +162,9 @@ async def serve_frontend():
             return HTMLResponse(path.read_text())
     # Debug: show what paths were tried
     tried = [str(p) + (" EXISTS" if p.exists() else " MISSING") for p in candidates]
-    import os
     cwd_files = os.listdir(".")
     return HTMLResponse(
-        f"<h1>yt→mp3</h1><p>Frontend not found.</p>"
+        f"<h1>yt-mp3</h1><p>Frontend not found.</p>"
         f"<pre>CWD: {os.getcwd()}\nFiles: {cwd_files}\nTried: {tried}</pre>"
     )
 
