@@ -73,7 +73,7 @@ def _get_base_opts() -> dict:
             "Accept-Language": "en-us,en;q=0.5",
             "Sec-Fetch-Mode": "navigate",
         },
-        "extractor_args": {"youtube": {"player_client": ["web"]}},
+        "extractor_args": {"youtube": {"player_client": ["web", "mweb"]}},
         "socket_timeout": 30,
     }
 
