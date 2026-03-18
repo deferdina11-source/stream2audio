@@ -1,19 +1,18 @@
 """
 yt-mp3 API Server
 FastAPI backend with yt-dlp for YouTube to MP3 conversion.
-Serves the PWA frontend and handles conversion requests.
 """
 
 import os
 import uuid
 import asyncio
 import shutil
+import subprocess
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import yt_dlp
 
 app = FastAPI(title="yt-mp3")
 
@@ -31,7 +30,6 @@ MAX_DURATION = 1200
 CLEANUP_AGE_SECONDS = 600
 COOKIE_PATH = Path("/tmp/yt_cookies.txt")
 
-# Write cookies on startup
 def _write_cookies():
     cookie_env = os.environ.get("YT_COOKIES", "").strip()
     if cookie_env:
@@ -70,65 +68,72 @@ def cleanup_old_files():
                 shutil.rmtree(item, ignore_errors=True)
 
 
-def _base_opts() -> dict:
-    """Base yt-dlp options. Let yt-dlp handle YouTube defaults."""
-    opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "socket_timeout": 30,
-    }
+def _run_ytdlp(args: list[str]) -> subprocess.CompletedProcess:
+    """Run yt-dlp as a subprocess with Node.js runtime enabled."""
+    cmd = [
+        "yt-dlp",
+        "--no-js-runtimes",        # clear defaults
+        "--js-runtimes", "node",   # enable Node.js
+        "--quiet",
+        "--no-warnings",
+    ]
     if HAS_COOKIES:
-        opts["cookiefile"] = str(COOKIE_PATH)
-    return opts
+        cmd += ["--cookies", str(COOKIE_PATH)]
+    cmd += args
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=120)
 
 
 def extract_info(url: str) -> dict:
-    """Extract metadata only - no format selection."""
-    ydl_opts = {
-        **_base_opts(),
-        "skip_download": True,
-        "ignore_no_formats_error": True,
-    }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        return ydl.extract_info(url, download=False)
+    """Extract metadata using yt-dlp CLI."""
+    import json
+    result = _run_ytdlp([
+        "--skip-download",
+        "--print-json",
+        url,
+    ])
+    if result.stdout.strip():
+        return json.loads(result.stdout.strip().split('\n')[0])
+    # If JSON output failed, try with --dump-json
+    result2 = _run_ytdlp([
+        "--skip-download",
+        "--dump-json",
+        url,
+    ])
+    if result2.stdout.strip():
+        return json.loads(result2.stdout.strip().split('\n')[0])
+    raise Exception(result.stderr or result2.stderr or "Could not fetch video info")
 
 
 def download_audio(url: str, output_dir: Path, quality: int) -> Path | None:
-    """Download audio. Let yt-dlp pick the best format automatically."""
-    # Try with default format selection first, then fallbacks
-    format_attempts = [
+    """Download and convert to MP3 using yt-dlp CLI."""
+    formats_to_try = [
         "bestaudio/best",
         "bestaudio*",
         "best",
     ]
 
-    last_error = None
-    for fmt in format_attempts:
-        try:
-            ydl_opts = {
-                **_base_opts(),
-                "format": fmt,
-                "postprocessors": [{
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": str(quality),
-                }],
-                "outtmpl": str(output_dir / "%(title)s.%(ext)s"),
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
+    last_error = ""
+    for fmt in formats_to_try:
+        result = _run_ytdlp([
+            "-f", fmt,
+            "-x",
+            "--audio-format", "mp3",
+            "--audio-quality", str(quality) + "K",
+            "-o", str(output_dir / "%(title)s.%(ext)s"),
+            url,
+        ])
 
-            mp3_files = list(output_dir.glob("*.mp3"))
-            if mp3_files:
-                return mp3_files[0]
-        except Exception as e:
-            last_error = e
-            for f in output_dir.glob("*.part"):
-                f.unlink(missing_ok=True)
-            continue
+        mp3_files = list(output_dir.glob("*.mp3"))
+        if mp3_files:
+            return mp3_files[0]
+
+        last_error = result.stderr
+        # Clean partial files
+        for f in output_dir.glob("*.part"):
+            f.unlink(missing_ok=True)
 
     if last_error:
-        raise last_error
+        raise Exception(last_error.strip())
     return None
 
 
@@ -169,7 +174,6 @@ async def serve_manifest():
         ],
     }
 
-
 @app.get("/icon-192.svg")
 @app.get("/icon-512.svg")
 async def serve_icon():
@@ -180,7 +184,6 @@ async def serve_icon():
         <circle cx="320" cy="347" r="48" stroke="#FF4B2B" stroke-width="32" fill="none"/>
     </svg>'''
     return HTMLResponse(content=svg, media_type="image/svg+xml")
-
 
 @app.get("/sw.js")
 async def serve_sw():
@@ -256,6 +259,11 @@ async def download(file_id: str):
 
 @app.get("/api/health")
 async def health():
-    import shutil as sh
-    deno_path = sh.which("deno")
-    return {"status": "ok", "cookies": HAS_COOKIES, "deno": deno_path}
+    node_check = subprocess.run(["node", "--version"], capture_output=True, text=True)
+    ytdlp_check = subprocess.run(["yt-dlp", "--version"], capture_output=True, text=True)
+    return {
+        "status": "ok",
+        "cookies": HAS_COOKIES,
+        "node": node_check.stdout.strip(),
+        "ytdlp": ytdlp_check.stdout.strip(),
+    }
