@@ -62,11 +62,35 @@ def cleanup_old_files():
             shutil.rmtree(item, ignore_errors=True)
 
 
+def _get_base_opts() -> dict:
+    """Common yt-dlp options to avoid bot detection."""
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-us,en;q=0.5",
+            "Sec-Fetch-Mode": "navigate",
+        },
+        "extractor_args": {"youtube": {"player_client": ["web"]}},
+        "socket_timeout": 30,
+    }
+
+    # Support cookies via environment variable
+    cookie_env = os.environ.get("YT_COOKIES", "").strip()
+    if cookie_env:
+        cookie_path = Path("/tmp/yt_cookies.txt")
+        cookie_path.write_text(cookie_env)
+        opts["cookiefile"] = str(cookie_path)
+
+    return opts
+
+
 def extract_info(url: str) -> dict:
     """Extract video metadata without downloading."""
     ydl_opts = {
-        "quiet": True,
-        "no_warnings": True,
+        **_get_base_opts(),
         "extract_flat": False,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -76,6 +100,7 @@ def extract_info(url: str) -> dict:
 def download_audio(url: str, output_dir: Path, quality: int) -> Path | None:
     """Download and convert to MP3."""
     ydl_opts = {
+        **_get_base_opts(),
         "format": "bestaudio/best",
         "postprocessors": [
             {
@@ -85,8 +110,6 @@ def download_audio(url: str, output_dir: Path, quality: int) -> Path | None:
             }
         ],
         "outtmpl": str(output_dir / "%(title)s.%(ext)s"),
-        "quiet": True,
-        "no_warnings": True,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
@@ -100,9 +123,10 @@ def download_audio(url: str, output_dir: Path, quality: int) -> Path | None:
 @app.get("/")
 async def serve_frontend():
     """Serve the PWA frontend."""
+    # Try multiple possible locations
     candidates = [
         Path(__file__).parent / "static" / "index.html",
-        Path("/app/static /index.html"),
+        Path("/app/static/index.html"),
         Path("static/index.html"),
         Path(__file__).parent / "index.html",
         Path("/app/index.html"),
@@ -111,9 +135,14 @@ async def serve_frontend():
     for path in candidates:
         if path.exists():
             return HTMLResponse(path.read_text())
+    # Debug: show what paths were tried
+    tried = [str(p) + (" EXISTS" if p.exists() else " MISSING") for p in candidates]
     import os
     cwd_files = os.listdir(".")
-    return HTMLResponse(f"<h1>yt-mp3</h1><p>Frontend not found.</p><pre>CWD: {os.getcwd()}\nFiles: {cwd_files}</pre>")
+    return HTMLResponse(
+        f"<h1>yt→mp3</h1><p>Frontend not found.</p>"
+        f"<pre>CWD: {os.getcwd()}\nFiles: {cwd_files}\nTried: {tried}</pre>"
+    )
 
 
 @app.get("/manifest.json")
