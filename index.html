@@ -1,739 +1,214 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#0a0a0a">
-    <link rel="manifest" href="/manifest.json">
-    <title>yt→mp3</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg: #0a0a0a;
-            --surface: #131313;
-            --surface2: #1a1a1a;
-            --border: #222;
-            --text: #eee;
-            --text2: #999;
-            --text3: #555;
-            --accent: #e54d2e;
-            --accent2: #ff6b4a;
-            --red: #e5484d;
-            --green: #30a46c;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'DM Sans', system-ui, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100dvh;
-            display: flex;
-            justify-content: center;
-            padding: 24px 16px;
-            padding-bottom: calc(24px + env(safe-area-inset-bottom, 0));
-            -webkit-font-smoothing: antialiased;
-        }
-        .app { width: 100%; max-width: 460px; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>yt → mp3</title>
 
-        /* --- Header --- */
-        .header { margin-bottom: 28px; }
-        .logo { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
-        .logo-icon {
-            width: 40px; height: 40px; border-radius: 12px;
-            background: rgba(229,77,46,0.1); border: 1px solid rgba(229,77,46,0.15);
-            display: flex; align-items: center; justify-content: center;
-        }
-        .logo h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.03em; }
-        .logo h1 span { color: var(--accent); }
-        .tagline { font-size: 14px; color: var(--text3); margin-top: 2px; }
+<style>
+body {
+    background:#0e0e0e;
+    color:#fff;
+    font-family:sans-serif;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+}
 
-        /* --- Input --- */
-        .input-area { position: relative; margin-bottom: 16px; }
-        .input-row { display: flex; gap: 8px; }
-        .search-input {
-            flex: 1; padding: 13px 16px;
-            font-family: 'DM Mono', monospace; font-size: 14px;
-            background: var(--surface2); border: 1px solid var(--border);
-            border-radius: 12px; color: var(--text); outline: none;
-            transition: border-color 0.2s;
-        }
-        .search-input:focus { border-color: #444; }
-        .search-input::placeholder { color: #444; }
-        .quality-btn {
-            padding: 0 14px; height: 46px; border-radius: 12px;
-            background: var(--surface2); border: 1px solid var(--border);
-            color: var(--text2); font-family: 'DM Mono', monospace;
-            font-size: 12px; cursor: pointer; display: flex;
-            align-items: center; gap: 4px; flex-shrink: 0;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .quality-btn .v { color: var(--accent); }
+.app {
+    width:100%;
+    max-width:400px;
+}
 
-        /* --- Search Results --- */
-        .results {
-            position: absolute; top: 54px; left: 0; right: 0; z-index: 50;
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: 14px; overflow: hidden;
-            box-shadow: 0 16px 48px rgba(0,0,0,0.5);
-            max-height: 360px; overflow-y: auto;
-        }
-        .results:empty { display: none; }
-        .result-item {
-            display: flex; align-items: center; gap: 12px;
-            padding: 10px 14px; cursor: pointer; border: none;
-            background: none; width: 100%; text-align: left; color: var(--text);
-            font-family: inherit; transition: background 0.15s;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .result-item:hover, .result-item:focus { background: var(--surface2); }
-        .result-item + .result-item { border-top: 1px solid #1a1a1a; }
-        .result-thumb {
-            width: 64px; height: 36px; border-radius: 6px;
-            object-fit: cover; background: #1a1a1a; flex-shrink: 0;
-        }
-        .result-info { flex: 1; min-width: 0; }
-        .result-title {
-            font-size: 13px; font-weight: 500; white-space: nowrap;
-            overflow: hidden; text-overflow: ellipsis;
-        }
-        .result-meta { font-size: 11px; color: var(--text3); margin-top: 2px; }
-        .results-loading {
-            padding: 20px; text-align: center; font-size: 13px; color: var(--text3);
-        }
+input {
+    width:100%;
+    padding:12px;
+    margin-bottom:10px;
+    background:#1a1a1a;
+    border:1px solid #333;
+    color:#fff;
+}
 
-        /* --- Selection Card --- */
-        .selection-card {
-            display: flex; align-items: center; gap: 14px;
-            padding: 12px; background: var(--surface); border-radius: 14px;
-            border: 1px solid var(--border); margin-bottom: 16px;
-        }
-        .sel-thumb {
-            width: 80px; height: 45px; border-radius: 8px;
-            object-fit: cover; background: #1a1a1a; flex-shrink: 0;
-        }
-        .sel-info { flex: 1; min-width: 0; }
-        .sel-title {
-            font-size: 14px; font-weight: 600;
-            overflow: hidden; text-overflow: ellipsis;
-            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-        }
-        .sel-meta { font-size: 12px; color: var(--text3); margin-top: 3px; }
+button {
+    width:100%;
+    padding:12px;
+    background:red;
+    border:none;
+    color:#fff;
+    font-weight:bold;
+    cursor:pointer;
+}
 
-        /* --- Action Button --- */
-        .action-btn {
-            width: 100%; padding: 15px; font-family: 'DM Sans', sans-serif;
-            font-size: 15px; font-weight: 700; border: none; border-radius: 14px;
-            cursor: pointer; transition: all 0.2s; -webkit-tap-highlight-color: transparent;
-        }
-        .action-btn:active { transform: scale(0.97); }
-        .action-btn.primary {
-            background: linear-gradient(135deg, var(--accent), var(--accent2));
-            color: #fff; box-shadow: 0 4px 20px rgba(229,77,46,0.25);
-        }
-        .action-btn.primary:disabled {
-            opacity: 0.35; cursor: not-allowed; box-shadow: none; transform: none;
-        }
-        .action-btn.secondary {
-            background: var(--surface2); color: var(--text2);
-            border: 1px solid var(--border);
-        }
+.result {
+    padding:10px;
+    border-bottom:1px solid #222;
+    cursor:pointer;
+}
 
-        /* --- Loading --- */
-        .loading-section {
-            padding: 24px 20px; background: var(--surface);
-            border-radius: 16px; border: 1px solid var(--border);
-            margin-bottom: 16px;
-        }
-        .loading-top { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
-        .spinner-ring {
-            width: 36px; height: 36px; border-radius: 50%;
-            border: 3px solid #222; border-top-color: var(--accent);
-            animation: spin 0.8s linear infinite; flex-shrink: 0;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .loading-text { flex: 1; }
-        .loading-label { font-size: 14px; font-weight: 600; }
-        .loading-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
-        .prog-track {
-            height: 6px; background: #1e1e1e; border-radius: 3px;
-            overflow: hidden; margin-bottom: 10px;
-        }
-        .prog-fill {
-            height: 100%; width: 0%; border-radius: 3px;
-            background: linear-gradient(90deg, var(--accent), var(--accent2));
-            transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .prog-row { display: flex; justify-content: space-between; }
-        .prog-status { font-size: 12px; color: var(--text3); }
-        .prog-pct { font-size: 12px; color: var(--accent); font-family: 'DM Mono', monospace; }
+.result:hover {
+    background:#222;
+}
 
-        /* --- Done --- */
-        .done-section { margin-bottom: 16px; }
-        .done-card {
-            display: flex; align-items: center; gap: 14px;
-            padding: 18px; background: var(--surface); border-radius: 16px;
-            border: 1px solid rgba(48,164,108,0.3); margin-bottom: 12px;
-        }
-        .done-check {
-            width: 40px; height: 40px; border-radius: 50%;
-            background: rgba(48,164,108,0.12); display: flex;
-            align-items: center; justify-content: center; flex-shrink: 0;
-        }
-        .done-title { font-size: 15px; font-weight: 600; }
-        .done-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
-        .done-buttons { display: flex; gap: 8px; }
-        .dl-btn {
-            flex: 1; padding: 14px 20px; font-family: 'DM Sans', sans-serif;
-            font-size: 14px; font-weight: 700; border: none; border-radius: 12px;
-            background: linear-gradient(135deg, var(--accent), var(--accent2));
-            color: #fff; cursor: pointer; text-decoration: none;
-            display: flex; align-items: center; justify-content: center; gap: 8px;
-            box-shadow: 0 4px 20px rgba(229,77,46,0.2);
-            -webkit-tap-highlight-color: transparent;
-        }
-        .dl-btn:active { transform: scale(0.97); }
-        .new-btn {
-            padding: 14px 20px; font-family: 'DM Sans', sans-serif;
-            font-size: 14px; font-weight: 600; background: var(--surface2);
-            color: var(--text2); border: 1px solid var(--border); border-radius: 12px;
-            cursor: pointer; -webkit-tap-highlight-color: transparent;
-        }
+.progress {
+    margin-top:20px;
+}
 
-        /* --- Error --- */
-        .error-msg {
-            font-size: 13px; color: var(--red); font-weight: 500;
-            padding: 10px 0 6px; line-height: 1.4;
-        }
+.bar {
+    height:6px;
+    background:#333;
+}
 
-        /* --- Save hint --- */
-        .save-hint {
-            display: flex; align-items: center; justify-content: center;
-            gap: 8px; font-size: 12px; color: #444;
-            padding: 10px 14px; background: rgba(255,255,255,0.02);
-            border-radius: 10px; border: 1px dashed #222; margin-top: 10px;
-        }
-        .save-hint strong { color: #666; }
+.bar-inner {
+    height:6px;
+    background:red;
+    width:0%;
+}
 
-        /* --- Footer / Donate --- */
-        .divider { width: 40px; height: 1px; background: #1e1e1e; margin: 24px auto 16px; }
-        .donate-toggle {
-            display: flex; align-items: center; justify-content: center;
-            gap: 6px; background: none; border: none; color: var(--accent);
-            font-family: 'DM Sans', sans-serif; font-size: 13px;
-            font-weight: 600; cursor: pointer; padding: 8px 0; width: 100%;
-            opacity: 0.8; transition: opacity 0.2s;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .donate-section {
-            padding: 22px 18px; background: var(--surface); border-radius: 18px;
-            border: 1px solid #1a1a1a; margin-top: 14px; position: relative; overflow: hidden;
-        }
-        .donate-section::before {
-            content: ''; position: absolute; top: 0; left: 0; right: 0;
-            height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent);
-            opacity: 0.4;
-        }
-        .donate-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-        .donate-heart {
-            width: 40px; height: 40px; border-radius: 50%;
-            background: rgba(229,77,46,0.08); display: flex;
-            align-items: center; justify-content: center;
-        }
-        .donate-title { font-size: 15px; font-weight: 700; }
-        .donate-msg { font-size: 13px; color: var(--text2); line-height: 1.6; margin-bottom: 14px; }
-        .donate-msg strong { color: #bbb; }
-        .donate-btns { display: flex; gap: 8px; flex-wrap: wrap; }
-        .donate-btn {
-            flex: 1; min-width: 100px; padding: 11px 14px;
-            font-family: 'DM Sans', sans-serif; font-size: 13px;
-            font-weight: 600; border: none; border-radius: 10px;
-            cursor: pointer; display: flex; align-items: center;
-            justify-content: center; gap: 6px; text-decoration: none;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .donate-btn.pp { background: #0070ba; color: #fff; }
-        .donate-btn.kf { background: #ff5e5b; color: #fff; }
-        .donate-btn.bm { background: #ffdd00; color: #000; }
-        .footer { font-size: 11px; color: #333; text-align: center; margin-top: 16px; }
-
-        /* --- Quality Picker --- */
-        .qp-overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.65);
-            display: flex; align-items: flex-end; justify-content: center;
-            z-index: 100; padding: 20px; padding-bottom: calc(20px + env(safe-area-inset-bottom, 0));
-        }
-        .qp-sheet {
-            width: 100%; max-width: 460px; background: var(--surface2);
-            border-radius: 20px; padding: 22px;
-        }
-        .qp-sheet h3 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
-        .qp-opt {
-            padding: 13px 14px; background: var(--surface); border: 1px solid var(--border);
-            border-radius: 10px; color: var(--text); font-family: 'DM Sans', sans-serif;
-            font-size: 14px; cursor: pointer; display: flex; justify-content: space-between;
-            width: 100%; margin-bottom: 6px; -webkit-tap-highlight-color: transparent;
-        }
-        .qp-opt.active { border-color: var(--accent); }
-        .qp-opt .qn { color: var(--text3); font-size: 12px; }
-
-        /* -- Transitions -- */
-        .fade-in { animation: fadeIn 0.3s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-
-        /* Hidden */
-        .hidden { display: none !important; }
-    </style>
+.spinner {
+    margin-top:10px;
+}
+</style>
 </head>
+
 <body>
-<div class="app" id="app">
 
-    <!-- HEADER (always visible) -->
-    <div class="header">
-        <div class="logo">
-            <div class="logo-icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                    <path d="M9 18V5l12-2v13" stroke="#e54d2e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    <circle cx="6" cy="18" r="3" stroke="#e54d2e" stroke-width="2.5" fill="none"/>
-                    <circle cx="18" cy="16" r="3" stroke="#e54d2e" stroke-width="2.5" fill="none"/>
-                </svg>
-            </div>
-            <h1>yt<span>→</span>mp3</h1>
-        </div>
-        <p class="tagline">Paste a link, search an artist, or find a song.</p>
-    </div>
+<div class="app">
 
-    <!-- INPUT (always visible) -->
-    <div class="input-area" id="input-area">
-        <div class="input-row">
-            <input id="main-input" class="search-input" type="text" placeholder="YouTube URL, artist, or song title…" autocomplete="off" spellcheck="false">
-            <button class="quality-btn" id="quality-btn"><span class="v" id="quality-val">192</span>kbps</button>
-        </div>
-        <div id="search-results" class="results"></div>
-    </div>
+<input id="input" placeholder="Paste link or search artist/song">
 
-    <!-- ERROR -->
-    <div id="error-area" class="hidden">
-        <p class="error-msg" id="error-msg"></p>
-    </div>
+<div id="results"></div>
 
-    <!-- SELECTION (shown when a video is selected) -->
-    <div id="selection-area" class="hidden">
-        <div class="selection-card">
-            <img id="sel-thumb" class="sel-thumb" src="" alt="">
-            <div class="sel-info">
-                <div class="sel-title" id="sel-title"></div>
-                <div class="sel-meta" id="sel-meta"></div>
-            </div>
-        </div>
-    </div>
+<button id="convert">Convert</button>
 
-    <!-- ACTION BUTTON -->
-    <div id="action-area">
-        <button class="action-btn primary" id="convert-btn" disabled>Convert to MP3</button>
+<div class="progress" id="progress" style="display:none;">
+    <div class="bar">
+        <div class="bar-inner" id="bar"></div>
     </div>
+    <div id="percent">0%</div>
+    <div class="spinner">⏳ Converting...</div>
+</div>
 
-    <!-- LOADING (shown during conversion) -->
-    <div id="loading-area" class="hidden">
-        <div class="loading-section">
-            <div class="loading-top">
-                <div class="spinner-ring"></div>
-                <div class="loading-text">
-                    <div class="loading-label" id="loading-label">Preparing…</div>
-                    <div class="loading-sub" id="loading-sub"></div>
-                </div>
-            </div>
-            <div class="prog-track">
-                <div class="prog-fill" id="prog-fill"></div>
-            </div>
-            <div class="prog-row">
-                <span class="prog-status" id="prog-status">Starting…</span>
-                <span class="prog-pct" id="prog-pct">0%</span>
-            </div>
-        </div>
-    </div>
+<div id="download"></div>
 
-    <!-- DONE -->
-    <div id="done-area" class="hidden">
-        <div class="done-section">
-            <div class="done-card">
-                <div class="done-check">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                        <path d="M5 13l4 4L19 7" stroke="#30a46c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                </div>
-                <div>
-                    <div class="done-title" id="done-title">Ready</div>
-                    <div class="done-sub" id="done-sub"></div>
-                </div>
-            </div>
-            <div class="done-buttons">
-                <a class="dl-btn" id="dl-btn" href="#" download>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
-                    Download MP3
-                </a>
-                <button class="new-btn" id="new-btn">New</button>
-            </div>
-            <div class="save-hint">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>
-                Saved to your <strong>Downloads</strong> folder
-            </div>
-        </div>
-    </div>
-
-    <!-- FOOTER / DONATE -->
-    <div class="divider"></div>
-    <button class="donate-toggle" id="donate-toggle">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
-        Support this project
-    </button>
-    <div id="donate-area" class="hidden">
-        <div class="donate-section fade-in">
-            <div class="donate-head">
-                <div class="donate-heart">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="#e54d2e" stroke="none"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
-                </div>
-                <div class="donate-title">Made with love, shared for free</div>
-            </div>
-            <p class="donate-msg">I build simple, fast tools that make everyday digital tasks easier.</p>
-            <p class="donate-msg">Everything I create is <strong>free to use</strong> — no clutter, no unnecessary barriers.</p>
-            <p class="donate-msg">If you find my work useful, you can support future projects here</p>
-            <div class="donate-btns">
-                <a class="donate-btn pp" href="https://paypal.me/YOUR_PAYPAL" target="_blank">PayPal</a>
-                <a class="donate-btn kf" href="https://ko-fi.com/YOUR_KOFI" target="_blank">Ko-fi</a>
-                <a class="donate-btn bm" href="https://buymeacoffee.com/YOUR_BMAC" target="_blank">Buy Me a Coffee</a>
-            </div>
-        </div>
-    </div>
-    <p class="footer">Only download content you have the rights to use.</p>
-
-    <!-- QUALITY PICKER -->
-    <div id="qp-overlay" class="qp-overlay hidden">
-        <div class="qp-sheet">
-            <h3>Audio Quality</h3>
-            <button class="qp-opt" data-q="128">128 kbps <span class="qn">Smaller</span></button>
-            <button class="qp-opt active" data-q="192">192 kbps <span class="qn">Recommended</span></button>
-            <button class="qp-opt" data-q="256">256 kbps <span class="qn">High quality</span></button>
-            <button class="qp-opt" data-q="320">320 kbps <span class="qn">Maximum</span></button>
-        </div>
-    </div>
 </div>
 
 <script>
-// ===== STATE =====
-let state = 'idle'; // idle | searching | selecting | loading | done | error
-let selectedVideo = null; // { id, title, duration, thumbnail, url }
-let quality = 192;
-let fileId = null;
-let convertLock = false;
-let searchTimeout = null;
+let selectedUrl = null;
+let timer = null;
+let loading = false;
 
-// ===== DOM REFS =====
-const $ = id => document.getElementById(id);
-const mainInput = $('main-input');
-const searchResults = $('search-results');
-const selectionArea = $('selection-area');
-const actionArea = $('action-area');
-const convertBtn = $('convert-btn');
-const loadingArea = $('loading-area');
-const doneArea = $('done-area');
-const errorArea = $('error-area');
+const input = document.getElementById('input');
+const results = document.getElementById('results');
+const convertBtn = document.getElementById('convert');
+const progress = document.getElementById('progress');
+const bar = document.getElementById('bar');
+const percent = document.getElementById('percent');
+const download = document.getElementById('download');
 
-// ===== HELPERS =====
-function formatDur(s) {
-    if (!s) return '0:00';
-    const m = Math.floor(s / 60), sec = s % 60;
-    return `${m}:${String(sec).padStart(2, '0')}`;
-}
+// --- SEARCH ---
+input.addEventListener('input', () => {
 
-function isYoutubeUrl(t) {
-    return /youtube\.com\/watch|youtu\.be\/|youtube\.com\/shorts\/|m\.youtube\.com\/watch/.test(t);
-}
+    if (loading) return;
 
-function escHtml(s) {
-    const d = document.createElement('div');
-    d.textContent = s || '';
-    return d.innerHTML;
-}
+    clearTimeout(timer);
 
-function showError(msg) {
-    $('error-msg').textContent = msg;
-    errorArea.classList.remove('hidden');
-}
+    const value = input.value.trim();
 
-function clearError() {
-    errorArea.classList.add('hidden');
-}
-
-function setState(newState) {
-    state = newState;
-    // Toggle visibility of sections
-    const isIdle = newState === 'idle' || newState === 'searching' || newState === 'error';
-    const isSelecting = newState === 'selecting';
-    const isLoading = newState === 'loading';
-    const isDone = newState === 'done';
-
-    mainInput.disabled = isLoading;
-    selectionArea.classList.toggle('hidden', !isSelecting && !isLoading && !isDone);
-    actionArea.classList.toggle('hidden', isLoading || isDone);
-    loadingArea.classList.toggle('hidden', !isLoading);
-    doneArea.classList.toggle('hidden', !isDone);
-
-    if (isIdle) {
-        convertBtn.disabled = false;
-        convertBtn.textContent = 'Convert to MP3';
-    }
-}
-
-// ===== SEARCH =====
-async function doSearch(query) {
-    if (query.length < 2) {
-        searchResults.innerHTML = '';
+    if (!value) {
+        results.innerHTML = '';
         return;
     }
-    searchResults.innerHTML = '<div class="results-loading">Searching…</div>';
-    try {
-        const res = await fetch('/api/search', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query }),
-        });
-        if (!res.ok) throw new Error('Search failed');
-        const items = await res.json();
-        if (!items.length) {
-            searchResults.innerHTML = '<div class="results-loading">No results found</div>';
-            return;
-        }
-        searchResults.innerHTML = items.map(v => `
-            <button class="result-item" data-id="${escHtml(v.id)}" data-title="${escHtml(v.title)}" data-dur="${v.duration}" data-thumb="${escHtml(v.thumbnail)}">
-                <img class="result-thumb" src="${escHtml(v.thumbnail)}" alt="" loading="lazy">
-                <div class="result-info">
-                    <div class="result-title">${escHtml(v.title)}</div>
-                    <div class="result-meta">${formatDur(v.duration)}</div>
-                </div>
-            </button>
-        `).join('');
-    } catch (e) {
-        searchResults.innerHTML = '<div class="results-loading">Search failed. Try again.</div>';
+
+    // If URL → skip search
+    if (value.includes("youtube.com") || value.includes("youtu.be")) {
+        selectedUrl = value;
+        results.innerHTML = '';
+        return;
     }
-}
 
-// ===== SELECT =====
-function selectVideo(id, title, duration, thumbnail) {
-    selectedVideo = {
-        id, title, duration: parseInt(duration) || 0, thumbnail,
-        url: `https://www.youtube.com/watch?v=${id}`,
-    };
-    searchResults.innerHTML = '';
-    mainInput.value = selectedVideo.url;
+    timer = setTimeout(async () => {
 
-    $('sel-thumb').src = thumbnail;
-    $('sel-title').textContent = title;
-    $('sel-meta').textContent = `${formatDur(selectedVideo.duration)} · Ready to convert`;
-
-    clearError();
-    setState('selecting');
-    convertBtn.disabled = false;
-}
-
-// ===== CONVERT =====
-async function doConvert() {
-    if (convertLock || !selectedVideo) return;
-    convertLock = true;
-    clearError();
-    setState('loading');
-
-    // Set loading info
-    $('loading-label').textContent = selectedVideo.title;
-    $('loading-sub').textContent = formatDur(selectedVideo.duration);
-
-    // Simulated progress
-    let p = 0;
-    const progFill = $('prog-fill');
-    const progPct = $('prog-pct');
-    const progStatus = $('prog-status');
-    progFill.style.width = '0%';
-
-    const ticker = setInterval(() => {
-        p += Math.random() * 5 + 1;
-        p = Math.min(p, 88);
-        progFill.style.width = p + '%';
-        progPct.textContent = Math.round(p) + '%';
-        progStatus.textContent = p < 20 ? 'Connecting…' : p < 50 ? 'Downloading audio…' : p < 80 ? 'Converting to MP3…' : 'Finalizing…';
-    }, 800);
-
-    try {
-        const res = await fetch('/api/convert', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: selectedVideo.url, quality }),
+        const res = await fetch('/api/search', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({query:value})
         });
-        clearInterval(ticker);
-
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.detail || 'Conversion failed');
-        }
 
         const data = await res.json();
-        fileId = data.file_id;
 
-        // Complete progress
-        progFill.style.width = '100%';
-        progPct.textContent = '100%';
-        progStatus.textContent = 'Complete!';
+        results.innerHTML = '';
 
-        // Show done after brief delay
-        setTimeout(() => {
-            $('done-title').textContent = data.title || selectedVideo.title;
-            $('done-sub').textContent = `${formatDur(data.duration || selectedVideo.duration)} · ${data.size_mb} MB`;
-            $('dl-btn').href = `/api/download/${fileId}`;
-            setState('done');
-            convertLock = false;
-        }, 400);
+        data.forEach(v => {
+            const div = document.createElement('div');
+            div.className = 'result';
+            div.textContent = v.title;
+
+            div.onclick = () => {
+                selectedUrl = v.webpage_url;
+                input.value = v.title;
+                results.innerHTML = '';
+            };
+
+            results.appendChild(div);
+        });
+
+    }, 400);
+});
+
+// --- CONVERT ---
+convertBtn.onclick = async () => {
+
+    if (loading) return;
+
+    const value = input.value.trim();
+
+    if (!value && !selectedUrl) {
+        alert('Enter URL or search');
+        return;
+    }
+
+    const url = selectedUrl || value;
+
+    loading = true;
+    progress.style.display = 'block';
+
+    let p = 0;
+
+    const fake = setInterval(() => {
+        p = Math.min(p + Math.random()*10, 90);
+        bar.style.width = p + '%';
+        percent.textContent = Math.floor(p) + '%';
+    }, 400);
+
+    try {
+
+        const res = await fetch('/api/convert', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({url:url, quality:192})
+        });
+
+        const data = await res.json();
+
+        clearInterval(fake);
+
+        bar.style.width = '100%';
+        percent.textContent = '100%';
+
+        download.innerHTML = `
+            <a href="/api/download/${data.file_id}">
+                <button>Download MP3</button>
+            </a>
+        `;
 
     } catch (e) {
-        clearInterval(ticker);
-        setState('error');
-        showError(e.message === 'Failed to fetch' ? 'Cannot reach the server. It may be waking up — try again in 30 seconds.' : e.message);
-        // Show selection again so user can retry
-        selectionArea.classList.remove('hidden');
-        actionArea.classList.remove('hidden');
-        convertBtn.disabled = false;
-        convertLock = false;
-    }
-}
-
-// ===== RESET =====
-function resetAll() {
-    selectedVideo = null;
-    fileId = null;
-    convertLock = false;
-    mainInput.value = '';
-    mainInput.disabled = false;
-    searchResults.innerHTML = '';
-    clearError();
-    setState('idle');
-    convertBtn.disabled = true;
-    mainInput.focus();
-}
-
-// ===== EVENT LISTENERS =====
-
-// Input: detect URL vs search text
-mainInput.addEventListener('input', () => {
-    const val = mainInput.value.trim();
-    clearError();
-
-    if (!val) {
-        searchResults.innerHTML = '';
-        selectedVideo = null;
-        convertBtn.disabled = true;
-        selectionArea.classList.add('hidden');
-        return;
+        alert('Error');
     }
 
-    if (isYoutubeUrl(val)) {
-        // It's a URL — extract video ID and select
-        searchResults.innerHTML = '';
-        const match = val.match(/(?:v=|youtu\.be\/|shorts\/)([^&?\s]+)/);
-        if (match) {
-            const vid = match[1];
-            selectVideo(vid, vid, 0, `https://img.youtube.com/vi/${vid}/mqdefault.jpg`);
-            // Fetch real info in background
-            fetch('/api/info', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: val }),
-            }).then(r => r.ok ? r.json() : null).then(info => {
-                if (info && selectedVideo && selectedVideo.id === vid) {
-                    selectedVideo.title = info.title;
-                    selectedVideo.duration = info.duration;
-                    selectedVideo.thumbnail = info.thumbnail;
-                    $('sel-thumb').src = info.thumbnail || selectedVideo.thumbnail;
-                    $('sel-title').textContent = info.title;
-                    $('sel-meta').textContent = `${formatDur(info.duration)} · Ready to convert`;
-                }
-            }).catch(() => {});
-        }
-    } else {
-        // It's a search query
-        selectionArea.classList.add('hidden');
-        selectedVideo = null;
-        convertBtn.disabled = true;
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => doSearch(val), 400);
-    }
-});
-
-// Click search result
-searchResults.addEventListener('click', (e) => {
-    const item = e.target.closest('.result-item');
-    if (item) {
-        selectVideo(
-            item.dataset.id,
-            item.dataset.title,
-            item.dataset.dur,
-            item.dataset.thumb,
-        );
-    }
-});
-
-// Close search on outside click
-document.addEventListener('click', (e) => {
-    if (!e.target.closest('#input-area')) {
-        searchResults.innerHTML = '';
-    }
-});
-
-// Convert button
-convertBtn.addEventListener('click', doConvert);
-
-// New button
-$('new-btn').addEventListener('click', resetAll);
-
-// Quality button
-$('quality-btn').addEventListener('click', () => {
-    $('qp-overlay').classList.remove('hidden');
-});
-
-// Quality picker
-$('qp-overlay').addEventListener('click', (e) => {
-    if (e.target === $('qp-overlay')) {
-        $('qp-overlay').classList.add('hidden');
-        return;
-    }
-    const opt = e.target.closest('.qp-opt');
-    if (opt) {
-        quality = parseInt(opt.dataset.q);
-        $('quality-val').textContent = quality;
-        document.querySelectorAll('.qp-opt').forEach(o => o.classList.remove('active'));
-        opt.classList.add('active');
-        $('qp-overlay').classList.add('hidden');
-    }
-});
-
-// Donate toggle
-$('donate-toggle').addEventListener('click', () => {
-    $('donate-area').classList.toggle('hidden');
-});
-
-// Enter key
-mainInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && selectedVideo) doConvert();
-});
-
-// PWA
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-}
-
-// Focus
-mainInput.focus();
+    loading = false;
+};
 </script>
+
 </body>
 </html>
