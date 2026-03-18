@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0e0e0e">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icon-192.svg">
+    <title>yt→mp3</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0e0e0e;
+            --card: #141414;
+            --border: #222;
+            --text: #f0f0f0;
+            --text-dim: #777;
+            --text-muted: #444;
+            --accent: #FF4B2B;
+            --accent-end: #FF416C;
+            --input-bg: #1a1a1a;
+            --input-border: #2a2a2a;
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Outfit', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100dvh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            padding-bottom: calc(20px + var(--safe-bottom));
+            -webkit-font-smoothing: antialiased;
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 20px rgba(255,75,43,0.1); }
+            50% { box-shadow: 0 0 40px rgba(255,75,43,0.25); }
+        }
+        @keyframes waveBar {
+            0% { transform: scaleY(0.3); }
+            100% { transform: scaleY(1); }
+        }
+
+        .app {
+            width: 100%;
+            max-width: 480px;
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+            animation: fadeUp 0.5s ease;
+        }
+
+        /* Header */
+        .logo-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .logo-icon {
+            width: 48px; height: 48px;
+            border-radius: 14px;
+            background: rgba(255,75,43,0.08);
+            border: 1px solid rgba(255,75,43,0.15);
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        h1 {
+            font-size: 34px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            line-height: 1;
+        }
+        h1 .arrow { color: var(--accent); }
+        .tagline {
+            font-size: 15px;
+            color: var(--text-dim);
+            margin-top: 6px;
+        }
+
+        /* Input */
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .input-row {
+            display: flex;
+            gap: 8px;
+        }
+        .url-input {
+            flex: 1;
+            padding: 14px 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            border-radius: 12px;
+            color: var(--text);
+            outline: none;
+            transition: border-color 0.2s;
+            -webkit-appearance: none;
+        }
+        .url-input:focus { border-color: #444; }
+        .url-input::placeholder { color: #555; }
+
+        .paste-btn, .quality-btn {
+            height: 48px;
+            border-radius: 12px;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            color: #888;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .paste-btn { width: 48px; flex-shrink: 0; }
+        .paste-btn:active, .quality-btn:active { background: #222; }
+
+        .quality-btn {
+            padding: 0 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            font-weight: 500;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+        .quality-btn .val { color: var(--accent); }
+
+        /* Preview */
+        .preview-card {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px;
+            background: var(--card);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            animation: fadeUp 0.3s ease;
+        }
+        .preview-thumb {
+            width: 96px; height: 54px;
+            border-radius: 8px;
+            object-fit: cover;
+            background: #222;
+            flex-shrink: 0;
+        }
+        .preview-title {
+            font-size: 13px;
+            color: #ccc;
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+        .preview-meta {
+            font-size: 11px;
+            color: #555;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-top: 4px;
+        }
+
+        /* Buttons */
+        .convert-btn {
+            width: 100%;
+            padding: 16px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), var(--accent-end));
+            color: #fff;
+            border: none;
+            border-radius: 14px;
+            cursor: pointer;
+            letter-spacing: -0.01em;
+            box-shadow: 0 4px 24px rgba(255,75,43,0.25);
+            transition: all 0.25s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .convert-btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        .convert-btn:active:not(:disabled) {
+            transform: scale(0.97);
+        }
+
+        /* Progress */
+        .progress-section {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding: 20px;
+            background: var(--card);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            animation: fadeUp 0.3s ease;
+        }
+
+        .waveform {
+            display: flex;
+            gap: 3px;
+            align-items: center;
+            height: 32px;
+            justify-content: center;
+        }
+        .wave-bar {
+            width: 3px;
+            border-radius: 2px;
+            transition: height 0.25s ease, background 0.3s;
+        }
+        .wave-bar.active {
+            animation: waveBar 0.5s ease-in-out infinite alternate;
+        }
+
+        .progress-bar-outer {
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .progress-bar-inner {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--accent-end), var(--accent));
+            background-size: 200% 100%;
+            animation: shimmer 2s linear infinite;
+            border-radius: 3px;
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .progress-status {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .spinner {
+            width: 18px; height: 18px;
+            border: 2px solid rgba(255,255,255,0.15);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            flex-shrink: 0;
+        }
+        .progress-label {
+            flex: 1;
+            font-size: 14px;
+            color: #aaa;
+            font-weight: 500;
+        }
+        .progress-pct {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            color: var(--accent);
+            font-weight: 500;
+        }
+
+        /* Done */
+        .done-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 20px;
+            background: var(--card);
+            border-radius: 16px;
+            border: 1px solid rgba(255,75,43,0.2);
+            animation: fadeUp 0.4s ease, pulseGlow 3s ease infinite;
+        }
+        .check-circle {
+            width: 48px; height: 48px;
+            border-radius: 50%;
+            background: rgba(255,75,43,0.1);
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .done-title {
+            font-size: 16px;
+            font-weight: 700;
+        }
+        .done-sub {
+            font-size: 13px;
+            color: var(--text-dim);
+            margin-top: 2px;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 10px;
+        }
+        .download-btn {
+            flex: 1;
+            padding: 14px 20px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 15px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), var(--accent-end));
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            gap: 10px;
+            box-shadow: 0 4px 24px rgba(255,75,43,0.25);
+            text-decoration: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .download-btn:active { transform: scale(0.97); }
+
+        .reset-btn {
+            padding: 14px 20px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 15px;
+            font-weight: 600;
+            background: var(--input-bg);
+            color: #aaa;
+            border: 1px solid var(--input-border);
+            border-radius: 12px;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Error */
+        .error-text {
+            color: #ff6b6b;
+            font-size: 13px;
+            font-weight: 500;
+            padding-left: 4px;
+            line-height: 1.5;
+        }
+
+        /* Save location hint */
+        .save-hint {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #666;
+            padding: 10px 14px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 10px;
+            border: 1px dashed #2a2a2a;
+        }
+        .save-hint strong {
+            color: #999;
+        }
+
+        /* Donation Section */
+        .donate-section {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding: 24px 20px;
+            background: linear-gradient(145deg, #161616, #111);
+            border-radius: 20px;
+            border: 1px solid #1e1e1e;
+            position: relative;
+            overflow: hidden;
+        }
+        .donate-section::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), var(--accent-end), transparent);
+            opacity: 0.5;
+        }
+        .donate-heart {
+            width: 44px; height: 44px;
+            border-radius: 50%;
+            background: rgba(255,75,43,0.08);
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+            animation: heartPulse 2.5s ease infinite;
+        }
+        @keyframes heartPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+        .donate-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .donate-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text);
+            line-height: 1.3;
+        }
+        .donate-msg {
+            font-size: 13.5px;
+            color: #999;
+            line-height: 1.65;
+            font-weight: 400;
+        }
+        .donate-msg strong {
+            color: #bbb;
+            font-weight: 600;
+        }
+        .donate-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .donate-btn {
+            flex: 1;
+            min-width: 120px;
+            padding: 12px 16px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-decoration: none;
+            transition: all 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .donate-btn:active { transform: scale(0.96); }
+        .donate-btn.paypal {
+            background: #0070ba;
+            color: #fff;
+        }
+        .donate-btn.kofi {
+            background: #FF5E5B;
+            color: #fff;
+        }
+        .donate-btn.bmac {
+            background: #FFDD00;
+            color: #000;
+        }
+        .donate-btn.crypto {
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            color: #ccc;
+        }
+        .donate-toggle {
+            background: none;
+            border: none;
+            color: var(--accent);
+            font-family: 'Outfit', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 8px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            -webkit-tap-highlight-color: transparent;
+            opacity: 0.85;
+            transition: opacity 0.2s;
+        }
+        .donate-toggle:hover { opacity: 1; }
+        .donate-divider {
+            width: 40px;
+            height: 1px;
+            background: #2a2a2a;
+            margin: 0 auto;
+        }
+
+        /* Footer */
+        .footer {
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.6;
+            text-align: center;
+        }
+
+        /* Quality picker overlay */
+        .quality-picker {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            z-index: 100;
+            animation: fadeUp 0.2s ease;
+            padding: 20px;
+            padding-bottom: calc(20px + var(--safe-bottom));
+        }
+        .quality-sheet {
+            width: 100%;
+            max-width: 480px;
+            background: #1a1a1a;
+            border-radius: 20px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .quality-sheet h3 {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .quality-option {
+            padding: 14px 16px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text);
+            font-family: 'Outfit', sans-serif;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .quality-option:active { background: #1e1e1e; }
+        .quality-option.selected { border-color: var(--accent); }
+        .quality-option .note {
+            color: var(--text-dim);
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app" id="app"></div>
+
+    <script>
+        // --- State ---
+        let state = 'idle'; // idle | loading | done | error
+        let url = '';
+        let quality = 192;
+        let videoInfo = null;
+        let fileId = null;
+        let progress = 0;
+        let errorMsg = '';
+        let showQualityPicker = false;
+        let showDonate = false;
+        let progressInterval = null;
+
+        // Pre-generate waveform bar heights (fixed, not random per render)
+        const WAVE_BARS = Array.from({ length: 24 }, (_, i) => ({
+            h: 8 + ((Math.sin(i * 0.7) + 1) * 11) + (i % 3) * 3,
+            hue: 10 + i * 4,
+            delay: (i * 0.05).toFixed(2),
+        }));
+
+        const QUALITIES = [
+            { val: 128, label: '128 kbps', note: 'Smaller file' },
+            { val: 192, label: '192 kbps', note: 'Recommended' },
+            { val: 256, label: '256 kbps', note: 'High quality' },
+            { val: 320, label: '320 kbps', note: 'Maximum' },
+        ];
+
+        // --- Helpers ---
+        function extractVideoId(u) {
+            const patterns = [
+                /(?:youtube\.com\/watch\?v=)([^&\s]+)/,
+                /(?:youtu\.be\/)([^?\s]+)/,
+                /(?:youtube\.com\/embed\/)([^?\s]+)/,
+                /(?:youtube\.com\/shorts\/)([^?\s]+)/,
+            ];
+            for (const p of patterns) {
+                const m = u.match(p);
+                if (m) return m[1];
+            }
+            return null;
+        }
+
+        function formatDuration(s) {
+            const m = Math.floor(s / 60);
+            const sec = s % 60;
+            return `${m}:${String(sec).padStart(2, '0')}`;
+        }
+
+        // --- API ---
+        async function fetchInfo(videoUrl) {
+            const res = await fetch('/api/info', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: videoUrl }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || 'Failed to fetch video info');
+            }
+            return res.json();
+        }
+
+        async function fetchConvert(videoUrl, q) {
+            const res = await fetch('/api/convert', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: videoUrl, quality: q }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || 'Conversion failed');
+            }
+            return res.json();
+        }
+
+        // --- Actions ---
+        async function handleConvert() {
+            const vid = extractVideoId(url);
+            if (!vid) {
+                errorMsg = 'Enter a valid YouTube URL';
+                state = 'error';
+                render();
+                return;
+            }
+
+            state = 'loading';
+            progress = 0;
+            errorMsg = '';
+            render();
+
+            // Fake progress while waiting for API
+            let p = 0;
+            progressInterval = setInterval(() => {
+                p += Math.random() * 6 + 1;
+                progress = Math.min(p, 90);
+                // Update only progress elements, not full re-render
+                const bar = document.getElementById('prog-bar');
+                const pct = document.getElementById('prog-pct');
+                const lbl = document.getElementById('prog-label');
+                if (bar) bar.style.width = progress + '%';
+                if (pct) pct.textContent = Math.round(progress) + '%';
+                if (lbl) lbl.textContent = progress < 25 ? 'Fetching audio…' : progress < 60 ? 'Converting…' : 'Finalizing…';
+            }, 500);
+
+            try {
+                // Get info first
+                const info = await fetchInfo(url);
+                videoInfo = info;
+                render();
+
+                // Convert
+                const result = await fetchConvert(url, quality);
+                clearInterval(progressInterval);
+                progress = 100;
+                fileId = result.file_id;
+                videoInfo = { ...videoInfo, size_mb: result.size_mb };
+                state = 'done';
+            } catch (e) {
+                clearInterval(progressInterval);
+                if (e.message === 'Failed to fetch' || e.name === 'TypeError') {
+                    errorMsg = 'Cannot reach the server. Make sure the backend is running (see README for setup).';
+                } else {
+                    errorMsg = e.message || 'Something went wrong. Please try again.';
+                }
+                state = 'error';
+            }
+            render();
+        }
+
+        function handleReset() {
+            url = '';
+            state = 'idle';
+            videoInfo = null;
+            fileId = null;
+            progress = 0;
+            errorMsg = '';
+            render();
+            setTimeout(() => document.getElementById('url-input')?.focus(), 50);
+        }
+
+        async function handlePaste() {
+            try {
+                const text = await navigator.clipboard.readText();
+                url = text;
+                state = 'idle';
+                errorMsg = '';
+                render();
+            } catch {}
+        }
+
+        // --- Render ---
+        function render() {
+            const vid = extractVideoId(url);
+            const thumb = vid ? `https://img.youtube.com/vi/${vid}/mqdefault.jpg` : null;
+
+            let html = '';
+
+            // Header
+            html += `
+            <div>
+                <div class="logo-row">
+                    <div class="logo-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                            <path d="M9 18V5l12-2v13" stroke="#FF4B2B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            <circle cx="6" cy="18" r="3" stroke="#FF4B2B" stroke-width="2.5" fill="none"/>
+                            <circle cx="18" cy="16" r="3" stroke="#FF4B2B" stroke-width="2.5" fill="none"/>
+                        </svg>
+                    </div>
+                    <h1>yt<span class="arrow">→</span>mp3</h1>
+                </div>
+                <p class="tagline">Paste a YouTube link, get an MP3.</p>
+            </div>`;
+
+            // Input
+            html += `
+            <div class="input-group">
+                <div class="input-row">
+                    <input
+                        id="url-input"
+                        class="url-input"
+                        type="url"
+                        inputmode="url"
+                        placeholder="https://youtube.com/watch?v=..."
+                        value="${escapeHtml(url)}"
+                        ${state === 'loading' ? 'disabled' : ''}
+                    >
+                    <button class="paste-btn" onclick="handlePaste()" title="Paste">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                            <rect x="9" y="9" width="13" height="13" rx="2"/>
+                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                        </svg>
+                    </button>
+                    <button class="quality-btn" onclick="showQualityPicker=true;render()">
+                        <span class="val">${quality}</span>kbps
+                    </button>
+                </div>`;
+
+            if (state === 'error') {
+                html += `<p class="error-text">${escapeHtml(errorMsg)}</p>`;
+            }
+
+            // Preview
+            if (vid && (state === 'idle' || state === 'error')) {
+                const title = videoInfo?.title || vid;
+                const dur = videoInfo?.duration ? ` · ${formatDuration(videoInfo.duration)}` : '';
+                html += `
+                <div class="preview-card">
+                    <img class="preview-thumb" src="${thumb}" onerror="this.style.display='none'" alt="">
+                    <div>
+                        <div class="preview-title">${escapeHtml(title)}</div>
+                        <div class="preview-meta">Ready to convert${dur}</div>
+                    </div>
+                </div>`;
+            }
+
+            html += `</div>`;
+
+            // Convert button
+            if (state === 'idle' || state === 'error') {
+                html += `
+                <button class="convert-btn" onclick="handleConvert()" ${url ? '' : 'disabled'}>
+                    Convert to MP3
+                </button>`;
+            }
+
+            // Progress
+            if (state === 'loading') {
+                const bars = WAVE_BARS.map(b =>
+                    `<div class="wave-bar active" style="height:${b.h}px;background:hsl(${b.hue},85%,55%);animation-delay:${b.delay}s"></div>`
+                ).join('');
+
+                const label = progress < 25 ? 'Fetching audio…' : progress < 60 ? 'Converting…' : 'Finalizing…';
+
+                html += `
+                <div class="progress-section">
+                    <div class="waveform">${bars}</div>
+                    <div class="progress-bar-outer">
+                        <div class="progress-bar-inner" id="prog-bar" style="width:${progress}%"></div>
+                    </div>
+                    <div class="progress-status">
+                        <div class="spinner"></div>
+                        <span class="progress-label" id="prog-label">${label}</span>
+                        <span class="progress-pct" id="prog-pct">${Math.round(progress)}%</span>
+                    </div>
+                    ${videoInfo ? `
+                    <div class="preview-card" style="margin-top:4px">
+                        <img class="preview-thumb" src="${videoInfo.thumbnail || thumb}" onerror="this.style.display='none'" alt="">
+                        <div>
+                            <div class="preview-title">${escapeHtml(videoInfo.title)}</div>
+                            <div class="preview-meta">${formatDuration(videoInfo.duration)}</div>
+                        </div>
+                    </div>` : ''}
+                </div>`;
+            }
+
+            // Done
+            if (state === 'done') {
+                const sizeTxt = videoInfo?.size_mb ? ` · ${videoInfo.size_mb} MB` : '';
+                const inactBars = Array.from({ length: 24 }, (_, i) => {
+                    return `<div class="wave-bar" style="height:4px;background:#3a3a3a"></div>`;
+                }).join('');
+
+                html += `
+                <div style="display:flex;flex-direction:column;gap:20px;animation:fadeUp 0.4s ease">
+                    <div class="waveform">${inactBars}</div>
+                    <div class="done-card">
+                        <div class="check-circle">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                <path d="M5 13l4 4L19 7" stroke="#FF4B2B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="done-title">${escapeHtml(videoInfo?.title || 'Conversion complete')}</div>
+                            <div class="done-sub">${videoInfo?.duration ? formatDuration(videoInfo.duration) : ''}${sizeTxt}</div>
+                        </div>
+                    </div>
+                    <div class="btn-row">
+                        <a class="download-btn" href="/api/download/${fileId}" download>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            Download MP3
+                        </a>
+                        <button class="reset-btn" onclick="handleReset()">New</button>
+                    </div>
+                    <div class="save-hint">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <path d="M3 9h18"/>
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        </svg>
+                        Your MP3 will be saved to your <strong>Downloads</strong> folder
+                    </div>
+                </div>`;
+            }
+
+            // Donation section
+            html += `
+            <div class="donate-divider"></div>
+            <button class="donate-toggle" onclick="showDonate=!showDonate;render()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="${showDonate ? 'var(--accent)' : 'none'}" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
+                </svg>
+                ${showDonate ? 'Hide' : 'Support this project'}
+            </button>`;
+
+            if (showDonate) {
+                html += `
+                <div class="donate-section" style="animation:fadeUp 0.35s ease">
+                    <div class="donate-header">
+                        <div class="donate-heart">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--accent)" stroke="none">
+                                <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
+                            </svg>
+                        </div>
+                        <div class="donate-title">Made with love,<br>shared for free</div>
+                    </div>
+                    <p class="donate-msg">
+                        I build simple, fast tools that make everyday digital tasks easier.
+                    </p>
+                    <p class="donate-msg">
+                        Everything I create is <strong>free to use</strong> — no clutter, no unnecessary barriers.
+                    </p>
+                    <p class="donate-msg">
+                        If you find my work useful, you can support future projects here
+                    </p>
+                    <div class="donate-buttons">
+                        <a class="donate-btn paypal" href="https://paypal.me/YOUR_PAYPAL" target="_blank" rel="noopener">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7.076 21.337H2.47a.641.641 0 01-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797H9.603c-.564 0-1.04.408-1.13.964L7.076 21.337z"/></svg>
+                            PayPal
+                        </a>
+                        <a class="donate-btn kofi" href="https://ko-fi.com/YOUR_KOFI" target="_blank" rel="noopener">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/></svg>
+                            Ko-fi
+                        </a>
+                        <a class="donate-btn bmac" href="https://buymeacoffee.com/YOUR_BMAC" target="_blank" rel="noopener">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zM6 1v3M10 1v3M14 1v3"/></svg>
+                            Buy Me a Coffee
+                        </a>
+                    </div>
+                </div>`;
+            }
+
+            // Footer
+            html += `<div class="footer">Only download content you have the rights to use.</div>`;
+
+            // Quality picker
+            if (showQualityPicker) {
+                const opts = QUALITIES.map(q => `
+                    <button class="quality-option ${q.val === quality ? 'selected' : ''}"
+                            onclick="quality=${q.val};showQualityPicker=false;render()">
+                        ${q.label}
+                        <span class="note">${q.note}</span>
+                    </button>
+                `).join('');
+
+                html += `
+                <div class="quality-picker" onclick="if(event.target===this){showQualityPicker=false;render()}">
+                    <div class="quality-sheet">
+                        <h3>Audio Quality</h3>
+                        ${opts}
+                    </div>
+                </div>`;
+            }
+
+            document.getElementById('app').innerHTML = html;
+
+            // Bind input
+            const input = document.getElementById('url-input');
+            if (input) {
+                input.addEventListener('input', (e) => {
+                    url = e.target.value;
+                    if (state === 'error') { state = 'idle'; errorMsg = ''; }
+                    render();
+                });
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') handleConvert();
+                });
+            }
+        }
+
+        function escapeHtml(s) {
+            const d = document.createElement('div');
+            d.textContent = s || '';
+            return d.innerHTML;
+        }
+
+        // --- Init ---
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        }
+
+        render();
+        document.getElementById('url-input')?.focus();
+    </script>
+</body>
+</html>
