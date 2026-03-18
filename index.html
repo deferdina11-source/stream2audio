@@ -659,7 +659,18 @@
                 // Get info first
                 const info = await fetchInfo(url);
                 videoInfo = info;
-                render();
+                // Update preview card without full re-render
+                const previewContainer = document.getElementById('loading-preview');
+                if (previewContainer && videoInfo) {
+                    previewContainer.innerHTML = `
+                    <div class="preview-card" style="margin-top:4px">
+                        <img class="preview-thumb" src="${videoInfo.thumbnail || ''}" onerror="this.style.display='none'" alt="">
+                        <div>
+                            <div class="preview-title">${escapeHtml(videoInfo.title)}</div>
+                            <div class="preview-meta">${formatDuration(videoInfo.duration)}</div>
+                        </div>
+                    </div>`;
+                }
 
                 // Convert
                 const result = await fetchConvert(url, quality);
@@ -795,14 +806,14 @@
                         <span class="progress-label" id="prog-label">${label}</span>
                         <span class="progress-pct" id="prog-pct">${Math.round(progress)}%</span>
                     </div>
-                    ${videoInfo ? `
+                    <div id="loading-preview">${videoInfo ? `
                     <div class="preview-card" style="margin-top:4px">
                         <img class="preview-thumb" src="${videoInfo.thumbnail || thumb}" onerror="this.style.display='none'" alt="">
                         <div>
                             <div class="preview-title">${escapeHtml(videoInfo.title)}</div>
                             <div class="preview-meta">${formatDuration(videoInfo.duration)}</div>
                         </div>
-                    </div>` : ''}
+                    </div>` : ''}</div>
                 </div>`;
             }
 
