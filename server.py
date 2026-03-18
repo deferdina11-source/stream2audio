@@ -101,7 +101,7 @@ def download_audio(url: str, output_dir: Path, quality: int) -> Path | None:
     """Download and convert to MP3."""
     ydl_opts = {
         **_get_base_opts(),
-        "format": "bestaudio/best",
+        "format": "bestaudio*",
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
