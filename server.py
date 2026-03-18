@@ -1,182 +1,98 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-body {
-    background:#0e0e0e;
-    color:#fff;
-    font-family:sans-serif;
-    padding:20px;
-}
+import os
+import uuid
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+import yt_dlp
 
-input, button {
-    width:100%;
-    padding:12px;
-    margin-top:10px;
-    background:#1a1a1a;
-    color:#fff;
-    border:1px solid #333;
-}
+app = FastAPI()
 
-button {
-    background:red;
-    border:none;
-}
+DOWNLOAD_DIR = "downloads"
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-.result {
-    padding:10px;
-    border-bottom:1px solid #333;
-    cursor:pointer;
-}
 
-.progress {
-    margin-top:20px;
-}
+class ConvertRequest(BaseModel):
+    url: str
+    quality: int = 192
 
-.bar {
-    height:6px;
-    background:#333;
-}
 
-.bar-inner {
-    height:6px;
-    background:red;
-    width:0%;
-}
-</style>
-</head>
+class SearchRequest(BaseModel):
+    query: str
 
-<body>
 
-<input id="input" placeholder="Paste YouTube URL or search">
-
-<div id="results"></div>
-
-<div id="info"></div>
-
-<button onclick="convert()">Convert</button>
-
-<div class="progress" id="progress" style="display:none;">
-    <div class="bar">
-        <div class="bar-inner" id="bar"></div>
-    </div>
-    <div id="percent">0%</div>
-</div>
-
-<div id="download"></div>
-
-<script>
-let selectedUrl = null;
-let timer;
-
-// SEARCH
-document.getElementById('input').addEventListener('input', () => {
-
-    clearTimeout(timer);
-
-    const value = input.value.trim();
-
-    if (!value) return;
-
-    if (value.includes("youtube")) {
-        selectedUrl = value;
-        results.innerHTML = '';
-        return;
+# ---------- SEARCH ----------
+@app.post("/api/search")
+def search(req: SearchRequest):
+    ydl_opts = {
+        "quiet": True,
+        "skip_download": True
     }
 
-    timer = setTimeout(async () => {
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        data = ydl.extract_info(f"ytsearch5:{req.query}", download=False)
 
-        const res = await fetch('/api/search', {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({query:value})
-        });
-
-        const data = await res.json();
-
-        results.innerHTML = '';
-
-        data.forEach(v => {
-            const div = document.createElement('div');
-            div.className = 'result';
-            div.textContent = v.title;
-
-            div.onclick = () => {
-                selectedUrl = v.webpage_url;
-                input.value = v.title;
-                results.innerHTML = '';
-                loadInfo(selectedUrl);
-            };
-
-            results.appendChild(div);
-        });
-
-    }, 400);
-});
+    return [
+        {
+            "title": v["title"],
+            "webpage_url": v["webpage_url"],
+            "thumbnail": v.get("thumbnail")
+        }
+        for v in data["entries"]
+    ]
 
 
-// LOAD INFO
-async function loadInfo(url) {
-    const res = await fetch('/api/info', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({url})
-    });
-
-    const data = await res.json();
-
-    document.getElementById('info').innerHTML = `
-        <img src="${data.thumbnail}" width="100%">
-        <p>${data.title}</p>
-    `;
-}
-
-
-// CONVERT
-async function convert() {
-
-    const value = input.value.trim();
-
-    if (!selectedUrl && !value.includes("youtube")) {
-        alert("Select result or paste valid URL");
-        return;
+# ---------- INFO ----------
+@app.post("/api/info")
+def info(req: ConvertRequest):
+    ydl_opts = {
+        "quiet": True,
+        "skip_download": True
     }
 
-    const url = selectedUrl || value;
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        data = ydl.extract_info(req.url, download=False)
 
-    loadInfo(url);
+    return {
+        "title": data["title"],
+        "thumbnail": data.get("thumbnail")
+    }
 
-    progress.style.display = 'block';
 
-    let p = 0;
+# ---------- CONVERT ----------
+@app.post("/api/convert")
+def convert(req: ConvertRequest):
+    file_id = str(uuid.uuid4())
+    output_path = os.path.join(DOWNLOAD_DIR, f"{file_id}.mp3")
 
-    const fake = setInterval(() => {
-        p = Math.min(p + 10, 90);
-        bar.style.width = p + '%';
-        percent.textContent = p + '%';
-    }, 300);
+    ydl_opts = {
+        "format": "bestaudio/best",
+        "outtmpl": output_path,
+        "postprocessors": [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": str(req.quality)
+        }]
+    }
 
-    const res = await fetch('/api/convert', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({url})
-    });
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(req.url, download=True)
 
-    const data = await res.json();
+    return {
+        "file_id": file_id,
+        "title": info["title"]
+    }
 
-    clearInterval(fake);
 
-    bar.style.width = '100%';
-    percent.textContent = '100%';
+# ---------- DOWNLOAD ----------
+@app.get("/api/download/{file_id}")
+def download(file_id: str):
+    path = os.path.join(DOWNLOAD_DIR, f"{file_id}.mp3")
 
-    download.innerHTML = `
-        <a href="/api/download/${data.file_id}">
-            <button>Download MP3</button>
-        </a>
-    `;
-}
-</script>
+    if not os.path.exists(path):
+        return {"success": False, "error": "File not found or expired"}
 
-</body>
-</html>
+    return FileResponse(
+        path,
+        filename=f"{file_id}.mp3",
+        media_type="audio/mpeg"
+    )
