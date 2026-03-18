@@ -8,6 +8,7 @@ import os
 import uuid
 import asyncio
 import shutil
+import json
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
@@ -16,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import yt_dlp
 
-app = FastAPI(title="yt→mp3")
+app = FastAPI(title="yt-mp3")
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,6 +31,18 @@ DOWNLOAD_DIR = Path("/tmp/yt-mp3-downloads")
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 MAX_DURATION = 1200  # 20 minutes max
 CLEANUP_AGE_SECONDS = 600  # Delete files after 10 minutes
+COOKIE_PATH = Path("/tmp/yt_cookies.txt")
+
+
+# --- Write cookies on startup ---
+def _write_cookies():
+    cookie_env = os.environ.get("YT_COOKIES", "").strip()
+    if cookie_env:
+        COOKIE_PATH.write_text(cookie_env)
+        return True
+    return False
+
+HAS_COOKIES = _write_cookies()
 
 
 # --- Models ---
@@ -63,59 +76,50 @@ def cleanup_old_files():
                 shutil.rmtree(item, ignore_errors=True)
 
 
-def _get_base_opts() -> dict:
-    """Common yt-dlp options to avoid bot detection."""
-    opts = {
+def extract_info(url: str) -> dict:
+    """
+    Extract video metadata ONLY. No format selection, no download.
+    This should never fail due to format issues.
+    """
+    ydl_opts = {
         "quiet": True,
         "no_warnings": True,
-        "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-us,en;q=0.5",
-            "Sec-Fetch-Mode": "navigate",
-        },
-        "extractor_args": {"youtube": {"player_client": ["web", "mweb", "android"]}},
+        "skip_download": True,
+        "ignore_no_formats_error": True,
+        "extract_flat": False,
         "socket_timeout": 30,
     }
+    if HAS_COOKIES:
+        ydl_opts["cookiefile"] = str(COOKIE_PATH)
 
-    # Support cookies via environment variable
-    cookie_env = os.environ.get("YT_COOKIES", "").strip()
-    if cookie_env:
-        cookie_path = Path("/tmp/yt_cookies.txt")
-        cookie_path.write_text(cookie_env)
-        opts["cookiefile"] = str(cookie_path)
-
-    return opts
-
-
-def extract_info(url: str) -> dict:
-    """Extract video metadata without downloading."""
-    ydl_opts = {
-        **_get_base_opts(),
-        "extract_flat": False,
-        "skip_download": True,
-    }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         return ydl.extract_info(url, download=False)
 
 
 def download_audio(url: str, output_dir: Path, quality: int) -> Path | None:
-    """Download and convert to MP3. Tries multiple format options."""
-    formats_to_try = [
-        "bestaudio/best",
-        "bestaudio*",
-        "ba/b",
-        "worstaudio",
+    """Download and convert to MP3. Tries multiple format + client combos."""
+
+    # Different combos of format and player_client to try
+    attempts = [
+        {"format": "bestaudio/best", "extractor_args": {"youtube": {"player_client": ["android"]}}},
+        {"format": "bestaudio*", "extractor_args": {"youtube": {"player_client": ["android"]}}},
+        {"format": "bestaudio/best", "extractor_args": {"youtube": {"player_client": ["web"]}}},
+        {"format": "bestaudio*", "extractor_args": {"youtube": {"player_client": ["web"]}}},
+        {"format": "bestaudio/best", "extractor_args": {"youtube": {"player_client": ["mweb"]}}},
+        {"format": "ba/b"},
+        {"format": "best"},
+        {"format": "worstaudio"},
     ]
 
-    base_opts = _get_base_opts()
     last_error = None
 
-    for fmt in formats_to_try:
+    for attempt in attempts:
         try:
             ydl_opts = {
-                **base_opts,
-                "format": fmt,
+                "quiet": True,
+                "no_warnings": True,
+                "socket_timeout": 30,
+                "ignore_no_formats_error": True,
                 "postprocessors": [
                     {
                         "key": "FFmpegExtractAudio",
@@ -124,19 +128,34 @@ def download_audio(url: str, output_dir: Path, quality: int) -> Path | None:
                     }
                 ],
                 "outtmpl": str(output_dir / "%(title)s.%(ext)s"),
+                **attempt,
             }
+            if HAS_COOKIES:
+                ydl_opts["cookiefile"] = str(COOKIE_PATH)
+
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
 
-            # Find the resulting MP3
+            # Check for MP3 files
             mp3_files = list(output_dir.glob("*.mp3"))
             if mp3_files:
                 return mp3_files[0]
+
+            # Check for any audio files (ffmpeg may have created something)
+            for ext in ["*.m4a", "*.webm", "*.ogg", "*.wav", "*.opus"]:
+                files = list(output_dir.glob(ext))
+                if files:
+                    return files[0]
+
         except Exception as e:
             last_error = e
+            # Clean partial downloads
+            for f in output_dir.glob("*.part"):
+                f.unlink(missing_ok=True)
+            for f in output_dir.glob("*.ytdl"):
+                f.unlink(missing_ok=True)
             continue
 
-    # If all formats failed, raise the last error
     if last_error:
         raise last_error
     return None
@@ -146,7 +165,6 @@ def download_audio(url: str, output_dir: Path, quality: int) -> Path | None:
 @app.get("/")
 async def serve_frontend():
     """Serve the PWA frontend."""
-    # Try multiple possible locations (including 'static ' with trailing space)
     candidates = [
         Path(__file__).parent / "static" / "index.html",
         Path("/app/static/index.html"),
@@ -160,7 +178,6 @@ async def serve_frontend():
     for path in candidates:
         if path.exists():
             return HTMLResponse(path.read_text())
-    # Debug: show what paths were tried
     tried = [str(p) + (" EXISTS" if p.exists() else " MISSING") for p in candidates]
     cwd_files = os.listdir(".")
     return HTMLResponse(
@@ -171,26 +188,17 @@ async def serve_frontend():
 
 @app.get("/manifest.json")
 async def serve_manifest():
-    """PWA manifest."""
     return {
-        "name": "yt→mp3",
-        "short_name": "yt→mp3",
+        "name": "yt-mp3",
+        "short_name": "yt-mp3",
         "description": "YouTube to MP3 converter",
         "start_url": "/",
         "display": "standalone",
         "background_color": "#0e0e0e",
         "theme_color": "#FF4B2B",
         "icons": [
-            {
-                "src": "/icon-192.svg",
-                "sizes": "192x192",
-                "type": "image/svg+xml",
-            },
-            {
-                "src": "/icon-512.svg",
-                "sizes": "512x512",
-                "type": "image/svg+xml",
-            },
+            {"src": "/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml"},
+            {"src": "/icon-512.svg", "sizes": "512x512", "type": "image/svg+xml"},
         ],
     }
 
@@ -198,7 +206,6 @@ async def serve_manifest():
 @app.get("/icon-192.svg")
 @app.get("/icon-512.svg")
 async def serve_icon():
-    """App icon as SVG."""
     svg = '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
         <rect width="512" height="512" rx="96" fill="#0e0e0e"/>
         <path d="M160 380V140l200-33v217" stroke="#FF4B2B" stroke-width="32" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
@@ -210,7 +217,6 @@ async def serve_icon():
 
 @app.get("/sw.js")
 async def serve_sw():
-    """Minimal service worker for PWA install."""
     js = """
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(clients.claim()));
@@ -248,14 +254,15 @@ async def convert(req: ConvertRequest):
     """Convert YouTube video to MP3 and return download info."""
     cleanup_old_files()
 
-    # Validate
+    # Get info separately - don't let info failure block download
+    info = {}
     try:
         info = await asyncio.to_thread(extract_info, req.url)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        pass
 
     duration = info.get("duration", 0) or 0
-    if duration > MAX_DURATION:
+    if duration > MAX_DURATION and duration > 0:
         raise HTTPException(status_code=400, detail="Video too long")
 
     quality = max(128, min(320, req.quality))
@@ -305,4 +312,4 @@ async def download(file_id: str):
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", "cookies": HAS_COOKIES}

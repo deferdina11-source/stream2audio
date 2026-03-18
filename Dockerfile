@@ -1,9 +1,14 @@
 FROM python:3.12-slim
 
-# Install ffmpeg (required for MP3 conversion)
+# Install ffmpeg and curl (for Deno install)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg && \
+    apt-get install -y --no-install-recommends ffmpeg curl unzip && \
     rm -rf /var/lib/apt/lists/*
+
+# Install Deno (required by yt-dlp for YouTube JS challenges)
+RUN curl -fsSL https://deno.land/install.sh | sh
+ENV DENO_INSTALL="/root/.deno"
+ENV PATH="$DENO_INSTALL/bin:$PATH"
 
 WORKDIR /app
 
